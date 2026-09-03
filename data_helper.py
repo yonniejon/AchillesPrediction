@@ -158,8 +158,6 @@ def get_intersecting_gene_ids_and_data(gene_effect_file, gene_expression_file, a
             gene_expression = clean_gene_names(gene_expression, expression_id_col_name)
         achilles_scores.to_csv(ready_achilles_file, index=False)
         gene_expression.to_csv(ready_expression_file, index=False)
-    # gene_expression.to_csv("gene_expression_cell_lines_fixed.tsv", index=False, sep="\t")
-    # achilles_scores.to_csv("achilles_effect_cell_lines_fixed.tsv", index=False, sep="\t")
     if train_test_df_file:
         train_test_df = pd.read_csv(train_test_df_file, sep="\t")
     else:
