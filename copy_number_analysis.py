@@ -171,7 +171,9 @@ def number_one_correction():
     model, features = train_no_eval(achilles_scores, gene_expression, target_gene_name,
                                     "linear", num_features=20, copy_number_data=copy_number_data)
     cn_effect = model.model.coef_[-1]
-    achilles_scores[target_gene_name] = achilles_scores[target_gene_name].values - copy_number_data[target_gene_name].values * cn_effect
+    # the coefficient is for the standardized copy number, so scale it the same way the model did
+    cn_scaled = (copy_number_data[target_gene_name].values - model.sclr.mean_[-1]) / model.sclr.scale_[-1]
+    achilles_scores[target_gene_name] = achilles_scores[target_gene_name].values - cn_scaled * cn_effect
     model, features = train_no_eval(achilles_scores, gene_expression, target_gene_name,
                                     "linear", num_features=10, copy_number_data=None, should_plot=True,
                                     include_target_gene=True)

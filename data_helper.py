@@ -3,6 +3,7 @@ from sklearn.model_selection import KFold
 import numpy as np
 import random
 import argparse
+import hashlib
 import os
 
 
@@ -70,18 +71,12 @@ def clean_gene_names(df, id_col_name):
     seen_names = set()
     new_new_cols = []
     for col in new_cols:
-        if col in seen_names:
-            tokens = col.split("_")
-            if len(tokens) > 1:
-                suffix = int(tokens[1])
-                suffix += 1
-                new_name = tokens[0] + "_" + str(suffix)
-            else:
-                new_name = col + "_1"
-            seen_names.update(new_name)
-        else:
-            new_name = col
-            seen_names.add(col)
+        new_name = col
+        suffix = 0
+        while new_name in seen_names:
+            suffix += 1
+            new_name = col + "_" + str(suffix)
+        seen_names.add(new_name)
         new_new_cols.append(new_name)
     df.columns = new_new_cols
     return df
@@ -139,11 +134,28 @@ def get_intersecting_gene_ids_with_data_input(gene_expression, achilles_scores, 
     return achilles_scores, gene_expression, train_test_df, cv_df
 
 
+def get_ready_file_names(gene_effect_file, gene_expression_file, should_clean_gene_names):
+    # the cached files depend on both inputs, so key them on the input paths and modification times
+    key_parts = [str(should_clean_gene_names)]
+    for file_name in (gene_effect_file, gene_expression_file):
+        key_parts.append(os.path.abspath(file_name))
+        key_parts.append(str(os.path.getmtime(file_name)))
+    key = hashlib.md5("|".join(key_parts).encode()).hexdigest()[:12]
+    return "ready_achilles_{}.csv".format(key), "ready_gene_expression_{}.csv".format(key)
+
+
+def write_csv_atomically(df, file_name):
+    # parallel workers read the cache, so never let them see a partially written file
+    tmp_file_name = "{}.{}.tmp".format(file_name, os.getpid())
+    df.to_csv(tmp_file_name, index=False)
+    os.replace(tmp_file_name, file_name)
+
+
 def get_intersecting_gene_ids_and_data(gene_effect_file, gene_expression_file, achilles_id_col_name='DepMap_ID',
                                        expression_id_col_name='Unnamed: 0', cv_df_file=None, train_test_df_file=None,
                                        should_clean_gene_names=True, num_folds=5):
-    ready_achilles_file = "ready_achilles.csv"
-    ready_expression_file = "ready_gene_expression.csv"
+    ready_achilles_file, ready_expression_file = get_ready_file_names(gene_effect_file, gene_expression_file,
+                                                                      should_clean_gene_names)
     if os.path.isfile(ready_achilles_file) and os.path.isfile(ready_expression_file):
         gene_expression = pd.read_csv(ready_expression_file)#.sort_values(by=['Unnamed: 0'])
         achilles_scores = pd.read_csv(ready_achilles_file)#.sort_values(by=['DepMap_ID'])
@@ -156,8 +168,8 @@ def get_intersecting_gene_ids_and_data(gene_effect_file, gene_expression_file, a
         if should_clean_gene_names:
             achilles_scores = clean_gene_names(achilles_scores, achilles_id_col_name)
             gene_expression = clean_gene_names(gene_expression, expression_id_col_name)
-        achilles_scores.to_csv(ready_achilles_file, index=False)
-        gene_expression.to_csv(ready_expression_file, index=False)
+        write_csv_atomically(achilles_scores, ready_achilles_file)
+        write_csv_atomically(gene_expression, ready_expression_file)
     if train_test_df_file:
         train_test_df = pd.read_csv(train_test_df_file, sep="\t")
     else:

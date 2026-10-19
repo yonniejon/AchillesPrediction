@@ -14,8 +14,9 @@ if __name__ == '__main__':
                                                               num_folds=0)
 
     tissue_types, tissue_count = get_tissue_types(gene_expression)
-    gene_expression["tissue_type"] = tissue_types
-    achilles_scores["tissue_type"] = tissue_types
+    # keep the labels out of the data frames, feature selection would treat an extra column as a gene
+    tissue_types = np.array(tissue_types)
+    cell_ids = np.array(gene_expression['Unnamed: 0'])
 
     target_gene = "RPP25L"
 
@@ -24,8 +25,9 @@ if __name__ == '__main__':
     gene_rmse_dict = {"RPP25L": 0.2355486856, "VRK1": 0.3193518146, "SNAI2": 0.1602959911, "PRKAR1A": 0.2394600598}
     tissue_rmse = []
     for tissue, _ in top_tissues:
-        train_ids = gene_expression[gene_expression.tissue_type != tissue]
-        test_ids = gene_expression[gene_expression.tissue_type != tissue]
+        # leave one tissue out: train on all other tissues, test on this one
+        train_ids = list(cell_ids[tissue_types != tissue])
+        test_ids = list(cell_ids[tissue_types == tissue])
         train_test_df = create_train_test_df_using_manual_input(train_ids, test_ids)
         cv_rmse, cv_pearson, pearson_p_val, model, features = train_test_eval(achilles_scores, gene_expression,
                                                                               target_gene,

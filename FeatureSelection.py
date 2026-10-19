@@ -76,6 +76,8 @@ def get_top_k_columns_by_chi_squared(target, df, k):
                     chi_squared, p_val = chi_squared_statistic(target, B)
                 except:
                     chi_squared, p_val = 0, 1
+                if np.isnan(chi_squared):  # constant gene; a NaN key would break the sort below
+                    chi_squared = 0
                 # breaks_max = False
                 # for _, el in chi_squared_list:
                 #     corr_curr, p_val_2 = pearsonr(df[df.columns[idx]], df[df.columns[el]])
@@ -134,6 +136,8 @@ def get_top_k_columns_by_spearman_correlation(target, df, k):
                     corr, p_val = spearmanr(target, df[df.columns[idx]])
                 except:
                     corr, p_val = 0, 1
+                if np.isnan(corr):  # constant gene; a NaN key would break the sort below
+                    corr = 0
                 # breaks_max = False
                 # for _, el in correlation_list:
                 #     corr_curr, p_val_2 = pearsonr(df[df.columns[idx]], df[df.columns[el]])
@@ -190,6 +194,8 @@ def get_top_k_columns_by_correlation(target, df, k):
                     corr, p_val = pearsonr(target, df[df.columns[idx]])
                 except:
                     corr, p_val = 0, 1
+                if np.isnan(corr):  # constant gene; a NaN key would break the sort below
+                    corr = 0
                 # breaks_max = False
                 # for _, el in correlation_list:
                 #     corr_curr, p_val_2 = pearsonr(df[df.columns[idx]], df[df.columns[el]])

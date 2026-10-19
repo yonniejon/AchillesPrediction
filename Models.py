@@ -135,7 +135,9 @@ class KNNFeatureModel(ABC):
     def add_knn_model(self, x_train, train_y):
         knn_model = train_model(x_train, train_y, 'knn', False)
         self.knn_model = knn_model
-        x_train = self.enrich_with_knn(x_train)
+        # enrich_with_knn would find each training row at distance 0 and return its own y
+        knn_out = knn_model.predict_training_rows()
+        x_train = np.hstack((x_train, np.array([knn_out]).T))
         return x_train
 
 
@@ -310,13 +312,24 @@ class DeepLearning:
 
 class KNNModel:
     model = None
+    train_y = None
 
     def train(self, X, y, k=50):
         model = KNeighborsRegressor(n_neighbors=k, weights='distance')
         self.model = model.fit(X, y)
+        self.train_y = np.asarray(y)
 
     def predict(self, X):
         return self.model.predict(X).flatten()
+
+    def predict_training_rows(self):
+        # leave-one-out prediction for the rows the model was fit on, weighted like predict()
+        dist, ind = self.model.kneighbors()
+        with np.errstate(divide='ignore'):
+            weights = 1.0 / dist
+        zero_dist_rows = np.isinf(weights).any(axis=1)
+        weights[zero_dist_rows] = np.isinf(weights[zero_dist_rows])
+        return (weights * self.train_y[ind]).sum(axis=1) / weights.sum(axis=1)
 
 
 class Ensemble:
@@ -648,7 +661,8 @@ def tissue_plot(expression_dat, achilles_effect, model, in_use_gene_names, targe
                        colors=COLORS)
         viz.view()
         x = 0
-    if "linear" or "least" in type(model).__name__.lower():
+    model_type_name = type(model).__name__.lower()
+    if "linear" in model_type_name or "least" in model_type_name:
         sample_info = pd.read_csv("sample_info.csv")
         tissue_types = []
         for cell_id in expression_dat['Unnamed: 0']:
@@ -667,8 +681,8 @@ def tissue_plot(expression_dat, achilles_effect, model, in_use_gene_names, targe
             if X.shape[0] < 4:
                 print(f"skipping {tissue_n}")
                 continue
-            model = train_model(X, y, "linear", use_knn=False)
-            coefs = model.model.coef_
+            tissue_model = train_model(X, y, "linear", use_knn=False)
+            coefs = tissue_model.model.coef_
             negative_coef = [abs(x) if x < 0 else 0 for x in coefs]
             positive_coef = [x if x > 0 else 0 for x in coefs]
             x_pos = list(range(len(coefs)))
@@ -801,7 +815,7 @@ def copy_number_correction(achilles_data, target_col, old_col_names):
     old_col_names = set(old_col_names)
     cn_id_name = "Unnamed: 0"
     achilles_id_col_name = 'DepMap_ID'
-    old_col_name = [n for n in old_col_names if target_col in n][0]
+    old_col_name = [n for n in old_col_names if n.split("(")[0].strip() == target_col][0]
     #'VRK1 (7443)'
     copy_number_data = pd.read_csv("CCLE_gene_cn.csv", usecols=[cn_id_name, old_col_name])
     copy_number_data = clean_gene_names(copy_number_data, cn_id_name)
